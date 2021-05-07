@@ -54,12 +54,15 @@ class IndvUpload(BaseModel):
     link: str
     user_id: int
     user_name: Optional[str]
+    rubric_items: Optional[str]
 
 class IndvGrade(BaseModel):
     id: Optional[int]
     upload_id: int
-    overall_grade: int
+    overall_grade: float
     selected_rubric_items: Optional[str]
+    user_id: Optional[int]
+    is_me: Optional[bool]
 
 class UploadResponse(BaseModel):
     upload_info: IndvUpload

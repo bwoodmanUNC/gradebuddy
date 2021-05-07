@@ -159,6 +159,19 @@ def verify_class_student(connection, current_user, indv_class_id):
     
 #     return 'query'
 
+@app.get("/list/classes")
+async def list_all_user_classes(current_user: User = Depends(get_current_user)):
+    connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
+    tbl_students = Table('students')
+    tbl_classes = Table('classes')
+    query = str(Query.from_(tbl_students).join(tbl_classes).on(tbl_students.class_id == tbl_classes.id).select(tbl_classes.id, tbl_classes.name).where(tbl_students.student_id == current_user.id))
+    print(query)
+    cursor = connection.cursor()
+    cursor.execute(query)
+    class_list = [IndvClass(id=r[0], name=r[1]) for r in cursor.fetchall()]
+
+    return class_list
+
 @app.get("/class/{class_id}")
 async def get_class_assignments(class_id: int, current_user: User = Depends(get_current_user)):
     connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
@@ -181,7 +194,7 @@ async def get_assignment_uploads(assignment_id: int, current_user: User = Depend
     cursor = connection.cursor()
     cursor.execute(query)
     rows = cursor.fetchall()
-    uploads = [IndvUpload(id=r[0], assignment_id=r[1], link=r[2], user_id=r[3], user_name=r[5]) for r in rows]
+    uploads = [IndvUpload(id=r[0], assignment_id=r[1], link=r[2], user_id=r[3], user_name=r[6]) for r in rows]
     # print(rows)
     return uploads
 
@@ -190,18 +203,20 @@ async def get_upload_information(upload_id: int, current_user: User = Depends(ge
     connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
     tbl_uploads = Table('uploads')
     tbl_grades = Table('grades')
-    query_upload = str(Query.from_(tbl_uploads).select('*').where(tbl_uploads.id == upload_id))
+    tbl_assignments = Table('assignments')
+    query_upload = str(Query.from_(tbl_uploads).select('*').where(tbl_uploads.id == upload_id).join(tbl_assignments).on(tbl_uploads.assignment_id == tbl_assignments.id))
     query_grades = str(Query.from_(tbl_grades).select('*').where(tbl_grades.upload_id == upload_id))
     cursor = connection.cursor()
     cursor.execute(query_upload)
     response1 = cursor.fetchall()[0]
+    print(response1)
     upload_key = 'uploads/' + str(response1[2])
 
     s3_session = boto3.session.Session()
     client = s3_session.client('s3', region_name='nyc3', endpoint_url='https://nyc3.digitaloceanspaces.com', aws_access_key_id='NBBNIPXWULH7MATJ7XJI', aws_secret_access_key='vt2XSjao45I+f8U/uKvw1Hr5SVyKZFW5esSoKid6x/s')
     temp_link = client.generate_presigned_url(ClientMethod='get_object', Params={'Bucket': '426gradeapp', 'Key': upload_key}, ExpiresIn=60)
 
-    upload_obj = IndvUpload(id=response1[0], assignment_id=response1[1], link=temp_link, user_id=response1[3])
+    upload_obj = IndvUpload(id=response1[0], assignment_id=response1[1], link=temp_link, user_id=response1[3], rubric_items=response1[9])
 
     # going to verify that user is a part of this class
     tbl_assignments = Table('assignments')
@@ -211,10 +226,69 @@ async def get_upload_information(upload_id: int, current_user: User = Depends(ge
     assignment_class_id = response2[2]
     if verify_class_student(connection, current_user, assignment_class_id):
         cursor.execute(query_grades)
-        grades_arr = [IndvGrade(id=r[0], upload_id=r[1], overall_grade=r[2], selected_rubric_items=r[3]) for r in cursor.fetchall()]
+        grades_arr = [IndvGrade(id=r[0], upload_id=r[1], overall_grade=r[2], selected_rubric_items=r[3], is_me=(r[4] == current_user.id)) for r in cursor.fetchall()]
         return UploadResponse(upload_info=upload_obj, grades=grades_arr)
     else:
         raise HTTPException(401)
+
+@app.post("/new/grade")
+async def add_grade_for_upload(upload_id: int = Form(...), score: float = Form(...), selected_rubric_items: str = Form(...), current_user: User = Depends(get_current_user)):
+    try:
+        connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
+        tbl_uploads = Table('uploads')
+        tbl_assignments = Table('assignments')
+        cursor = connection.cursor()
+
+        query_uploads = str(Query.from_(tbl_uploads).select(tbl_uploads.assignment_id).where(tbl_uploads.id == upload_id))
+        cursor.execute(query_uploads)
+        current_assignment_id = cursor.fetchall()[0][0]
+        query_assignments = str(Query.from_(tbl_assignments).select(tbl_assignments.class_id).where(tbl_assignments.id == current_assignment_id))
+        print(query_assignments)
+        cursor.execute(query_assignments)
+        current_class_id = cursor.fetchall()[0][0]
+
+        if verify_class_student(connection, current_user, current_class_id):
+            tbl_grades = Table('grades')
+            query = str(Query.into(tbl_grades).columns(tbl_grades.upload_id, tbl_grades.overall_grade, tbl_grades.selected_rubric_items, tbl_grades.user_id).insert(upload_id, score, selected_rubric_items, current_user.id))
+            print(query)
+            cursor.execute(query)
+            connection.commit()
+            return True
+        else:
+            raise HTTPException(401)
+    except Error as e:
+        print(e)
+        raise HTTPException(status_code=500)
+
+@app.put("/update/grade")
+async def add_existing_grade_for_upload(grade_id: Optional[int] = Form(...), upload_id: int = Form(...), score: float = Form(...), selected_rubric_items: str = Form(...), current_user: User = Depends(get_current_user)):
+    try:
+        connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
+        tbl_uploads = Table('uploads')
+        tbl_assignments = Table('assignments')
+        cursor = connection.cursor()
+
+        query_uploads = str(Query.from_(tbl_uploads).select(tbl_uploads.assignment_id).where(tbl_uploads.id == upload_id))
+        cursor.execute(query_uploads)
+        current_assignment_id = cursor.fetchall()[0][0]
+        query_assignments = str(Query.from_(tbl_assignments).select(tbl_assignments.class_id).where(tbl_assignments.id == current_assignment_id))
+        print(query_assignments)
+        cursor.execute(query_assignments)
+        current_class_id = cursor.fetchall()[0][0]
+
+        if verify_class_student(connection, current_user, current_class_id):
+            tbl_grades = Table('grades')
+            query = str(Query.update(tbl_grades).set(tbl_grades.upload_id, upload_id).set(tbl_grades.overall_grade, score).set(tbl_grades.selected_rubric_items, selected_rubric_items).set(tbl_grades.user_id, current_user.id).where(tbl_grades.id == grade_id))
+            print(query)
+            cursor.execute(query)
+            connection.commit()
+            return True
+        else:
+            raise HTTPException(401)
+    except Error as e:
+        print(e)
+        raise HTTPException(status_code=500)
+
 
 @app.post("/new/upload")
 async def add_upload_for_assignment(new_upload: UploadFile = File(...), assignment_id: int = Form(...), current_user: User = Depends(get_current_user)):
@@ -240,11 +314,18 @@ async def add_upload_for_assignment(new_upload: UploadFile = File(...), assignme
             print(completed_upload)
 
             uploads_tbl = Table('uploads')
+            grades_tbl = Table('grades')
             upload_query = str(Query.into(uploads_tbl).columns(uploads_tbl.assignment_id, uploads_tbl.link, uploads_tbl.user_id).insert(assignment_id, completed_upload.link, completed_upload.user_id))
             increase_count_query = str(Query.update(tbl).set(tbl.num_uploads, tbl.num_uploads + 1).where(tbl.id == assignment_id))
             print(increase_count_query)
             cursor.execute(upload_query)
             cursor.execute(increase_count_query)
+            connection.commit()
+            cursor.execute('SELECT LAST_INSERT_ID()')
+            upload_id = cursor.fetchall()[0][0]
+            new_grade_query = str(Query.into(grades_tbl).columns(grades_tbl.upload_id, grades_tbl.overall_grade).insert(upload_id, 1))
+            print(new_grade_query)
+            cursor.execute(new_grade_query)
             connection.commit()
             # print(new_upload)
             connection.close()
@@ -262,17 +343,22 @@ async def add_assignment_endpoint(new_assignment: Assignment, current_user: User
         connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
         if verify_class_user(connection, current_user, new_assignment.class_id):
             tbl = Table('assignments')
-            query = str(Query.into(tbl).columns(tbl.name, tbl.class_id, tbl.num_uploads).insert(new_assignment.name, new_assignment.class_id, 0))
+            query = str(Query.into(tbl).columns(tbl.name, tbl.class_id, tbl.num_uploads, tbl.rubric).insert(new_assignment.name, new_assignment.class_id, 0, new_assignment.rubric))
             print(query)
             cursor = connection.cursor()
             cursor.execute(query)
             connection.commit()
-            connection.close()
-            return new_assignment
+            query_get_inserted_val = 'SELECT LAST_INSERT_ID()'
+            cursor.execute(query_get_inserted_val)
+            print('asdf')
+            resp = cursor.fetchall()
+            
+            return resp[0][0]
         else:
             connection.close()
             raise HTTPException(status_code=401)
     except Error as e:
+        print('asdf error')
         return e
     
 
