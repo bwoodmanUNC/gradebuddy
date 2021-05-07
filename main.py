@@ -68,7 +68,7 @@ def get_user(username):
     cursor.execute(query)
     rows = cursor.fetchall()
 
-    data = [User(id=r[0], username=r[1], email=r[3], password=r[2]) for r in rows]
+    data = [User(id=r[0], username=r[1], email=r[3], password=r[2], is_power=r[4]) for r in rows]
 
     # if username in db:
     if len(data) > 0:
@@ -165,6 +165,18 @@ async def list_all_user_classes(current_user: User = Depends(get_current_user)):
     tbl_students = Table('students')
     tbl_classes = Table('classes')
     query = str(Query.from_(tbl_students).join(tbl_classes).on(tbl_students.class_id == tbl_classes.id).select(tbl_classes.id, tbl_classes.name).where(tbl_students.student_id == current_user.id))
+    print(query)
+    cursor = connection.cursor()
+    cursor.execute(query)
+    class_list = [IndvClass(id=r[0], name=r[1]) for r in cursor.fetchall()]
+
+    return class_list
+
+@app.get("/list/owned_classes")
+async def list_all_user_classes(current_user: User = Depends(get_current_user)):
+    connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
+    tbl_classes = Table('classes')
+    query = str(Query.from_(tbl_classes).select(tbl_classes.id, tbl_classes.name).where(tbl_classes.user == current_user.id))
     print(query)
     cursor = connection.cursor()
     cursor.execute(query)
@@ -364,16 +376,19 @@ async def add_assignment_endpoint(new_assignment: Assignment, current_user: User
 
 @app.post("/new/class")
 async def add_class_endpoint(new_class: IndvClass, current_user: User = Depends((get_current_user))):
-    new_class.user = current_user.id
-    connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
-    classes_table = Table('classes')
-    query = str(Query.into(classes_table).columns(classes_table.name, classes_table.user).insert(new_class.name, new_class.user))
-    print(query)
-    cursor = connection.cursor()
-    cursor.execute(query)
-    connection.commit()
-    connection.close()
-    return True
+    if current_user.is_power:
+        new_class.user = current_user.id
+        connection = create_connection('143.198.112.73', 'ben3', 'P1neappleRunn3rd', 'grading')
+        classes_table = Table('classes')
+        query = str(Query.into(classes_table).columns(classes_table.name, classes_table.user).insert(new_class.name, new_class.user))
+        print(query)
+        cursor = connection.cursor()
+        cursor.execute(query)
+        connection.commit()
+        connection.close()
+        return True
+    else:
+        raise HTTPException(401)
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):

@@ -26,6 +26,7 @@ class User(BaseModel):
     username: str
     email: Optional[str] = None
     password: str
+    is_power: bool
 
 class Token(BaseModel):
     access_token: str
