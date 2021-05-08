@@ -211,7 +211,7 @@ async def list_all_user_classes(current_user: User = Depends(get_current_user)):
     print(query)
     cursor = connection.cursor()
     cursor.execute(query)
-    class_list = [IndvClass(id=r[0], name=r[1]) for r in cursor.fetchall()]
+    class_list = [IndvClass(id=r[0], name=r[1], join_code=r[3]) for r in cursor.fetchall()]
 
     connection.close()
     return class_list
