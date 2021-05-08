@@ -207,11 +207,11 @@ async def list_all_user_classes(current_user: User = Depends(get_current_user)):
 async def list_all_user_classes(current_user: User = Depends(get_current_user)):
     connection = create_connection(DATABASE_ADDRESS, DATABASE_USER, DATABASE_PASSWORD, 'grading')
     tbl_classes = Table('classes')
-    query = str(Query.from_(tbl_classes).select(tbl_classes.id, tbl_classes.name).where(tbl_classes.user == current_user.id))
+    query = str(Query.from_(tbl_classes).select(tbl_classes.id, tbl_classes.name, tbl_classes.join_code).where(tbl_classes.user == current_user.id))
     print(query)
     cursor = connection.cursor()
     cursor.execute(query)
-    class_list = [IndvClass(id=r[0], name=r[1], join_code=r[3]) for r in cursor.fetchall()]
+    class_list = [IndvClass(id=r[0], name=r[1], join_code=r[2]) for r in cursor.fetchall()]
 
     connection.close()
     return class_list
