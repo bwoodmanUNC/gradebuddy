@@ -28,6 +28,10 @@ class User(BaseModel):
     password: str
     is_power: bool
 
+class NewUser(BaseModel):
+    username: str
+    password: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -41,6 +45,7 @@ class IndvClass(BaseModel):
     id: Optional[int]
     name: str
     user: Optional[int]
+    join_code: Optional[str]
 
 class Assignment(BaseModel):
     id: Optional[int]

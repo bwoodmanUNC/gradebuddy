@@ -18,6 +18,9 @@ import uuid
 
 import os
 
+import random
+import string
+
 # SALT = b'\xe0\xfd\xdb4\x07<\xb5\xcd\x97\xa1]\x94yo>\x07~\x13\xc0\xeb\x13^\x1f$ \xf1<Xx"\x19\x0f'
 # SECRET_KEY = "89a571ae0f0895c88b639ad25c2abdb74716cbc2e92ebde082635ba0f76dace2"
 # ALGORITHM = "HS256"
@@ -173,6 +176,19 @@ def verify_class_student(connection, current_user, indv_class_id):
 # async def add_class_endpoint(new_class: IndvClass, current_user: User = Depends((get_current_user))):
     
 #     return 'query'
+
+@app.post("/new/user")
+async def new_user(username: str = Form(...), password: str = Form(...)):
+    connection = create_connection(DATABASE_ADDRESS, DATABASE_USER, DATABASE_PASSWORD, 'grading')
+    user_table = Table('users')
+    encrypted_pass = get_password_hash(password)
+    new_user_query = str(Query.into(user_table).columns(user_table.username, user_table.password, user_table.is_power).insert(username, encrypted_pass, 1))
+    # print(query)
+    cursor = connection.cursor()
+    cursor.execute(new_user_query)
+    connection.commit()
+    connection.close()
+    return True
 
 @app.get("/list/classes")
 async def list_all_user_classes(current_user: User = Depends(get_current_user)):
@@ -402,7 +418,8 @@ async def add_class_endpoint(new_class: IndvClass, current_user: User = Depends(
         new_class.user = current_user.id
         connection = create_connection(DATABASE_ADDRESS, DATABASE_USER, DATABASE_PASSWORD, 'grading')
         classes_table = Table('classes')
-        query = str(Query.into(classes_table).columns(classes_table.name, classes_table.user).insert(new_class.name, new_class.user))
+        join_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+        query = str(Query.into(classes_table).columns(classes_table.name, classes_table.user, classes_table.join_code).insert(new_class.name, new_class.user, join_code))
         print(query)
         cursor = connection.cursor()
         cursor.execute(query)
@@ -411,6 +428,25 @@ async def add_class_endpoint(new_class: IndvClass, current_user: User = Depends(
         return True
     else:
         raise HTTPException(401)
+
+@app.post("/join/class/{join_code}")
+async def student_join_class(join_code: str, current_user: User = Depends(get_current_user)):
+    connection = create_connection(DATABASE_ADDRESS, DATABASE_USER, DATABASE_PASSWORD, 'grading')
+    classes_table = Table('classes')
+    students_tbl = Table('students')
+    query_check_code = str(Query.from_(classes_table).select('*').where(classes_table.join_code == join_code))
+    # print(query)
+    cursor = connection.cursor()
+    cursor.execute(query_check_code)
+    resp = cursor.fetchall()
+    if len(resp) == 0:
+        connection.close()
+        raise HTTPException(401)
+    query_add_student = str(Query.into(students_tbl).columns(students_tbl.student_id, students_tbl.class_id).insert(current_user.id, resp[0][0]))
+    cursor.execute(query_add_student)
+    connection.commit()
+    connection.close()
+    return True
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
