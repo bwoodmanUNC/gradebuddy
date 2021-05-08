@@ -503,6 +503,10 @@ async def root():
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+@app.get("/user/name")
+async def get_user_name(current_user: User = Depends(get_current_user)):
+    return current_user.username
+
 # @app.get('/login')
 # async def login():
 #     # result = 
