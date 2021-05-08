@@ -50,8 +50,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 origins = [
-    "http://localhost:3000",
-    "http://localhost:8000",
+    "*"
 ]
 
 app.add_middleware(
