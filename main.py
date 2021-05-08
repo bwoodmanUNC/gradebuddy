@@ -216,6 +216,37 @@ async def list_all_user_classes(current_user: User = Depends(get_current_user)):
     connection.close()
     return class_list
 
+@app.get("/list/submission_grades/{upload_id}")
+async def get_submission_grades(upload_id: int, current_user: User = Depends(get_current_user)):
+    connection = create_connection(DATABASE_ADDRESS, DATABASE_USER, DATABASE_PASSWORD, 'grading')
+    tbl_uploads = Table('uploads')
+    query_uploads = str(Query.from_(tbl_uploads).select('*').where(tbl_uploads.id == upload_id))
+    cursor = connection.cursor()
+    cursor.execute(query_uploads)
+    resp = cursor.fetchall()
+    if len(resp) > 0:
+        tbl_assignments = Table('assignments')
+        query_assignments = str(Query.from_(tbl_assignments).select('*').where(tbl_assignments.id == resp[0][1]))
+        cursor.execute(query_assignments)
+        resp_assignments = cursor.fetchall()
+        if len(resp_assignments) > 0 and verify_class_user(connection, current_user, resp_assignments[0][2]):
+            tbl_grades = Table('grades')
+            tbl_users = Table('users')
+            query = str(Query.from_(tbl_grades).select('*').where(tbl_grades.upload_id == upload_id).join(tbl_users).on(tbl_users.id == tbl_grades.user_id))
+            print(query)
+            cursor.execute(query)
+            grade_list = [GradeResponse(id=r[0], overall_grade=r[2], username=r[6]) for r in cursor.fetchall()]
+            print(grade_list)
+            connection.close()
+            return grade_list
+        else:
+            connection.close()
+            raise HTTPException(401)
+    else:
+        connection.close()
+        raise HTTPException(401)
+    # return True
+
 @app.get("/class/{class_id}")
 async def get_class_assignments(class_id: int, current_user: User = Depends(get_current_user)):
     connection = create_connection(DATABASE_ADDRESS, DATABASE_USER, DATABASE_PASSWORD, 'grading')

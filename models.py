@@ -70,6 +70,11 @@ class IndvGrade(BaseModel):
     user_id: Optional[int]
     is_me: Optional[bool]
 
+class GradeResponse(BaseModel):
+    id: int
+    overall_grade: float
+    username: str
+
 class UploadResponse(BaseModel):
     upload_info: IndvUpload
     grades: List[IndvGrade]
