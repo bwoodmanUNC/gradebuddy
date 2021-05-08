@@ -32,6 +32,9 @@ DATABASE_ADDRESS = os.environ['DATABASE_ADDRESS']
 DATABASE_USER = os.environ['DATABASE_USER']
 DATABASE_PASSWORD = os.environ['DATABASE_PASSWORD']
 
+AWS_ACCESS_KEY = os.environ['AWS_ACCESS_KEY']
+AWS_SECRET_KEY = os.environ['AWS_SECRET_KEY']
+
 
 
 def create_connection(host, user, password, database, port='3306'):
@@ -240,7 +243,7 @@ async def get_upload_information(upload_id: int, current_user: User = Depends(ge
     upload_key = 'uploads/' + str(response1[2])
 
     s3_session = boto3.session.Session()
-    client = s3_session.client('s3', region_name='nyc3', endpoint_url='https://nyc3.digitaloceanspaces.com', aws_access_key_id='NBBNIPXWULH7MATJ7XJI', aws_secret_access_key='vt2XSjao45I+f8U/uKvw1Hr5SVyKZFW5esSoKid6x/s')
+    client = s3_session.client('s3', region_name='nyc3', endpoint_url='https://nyc3.digitaloceanspaces.com', aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY)
     temp_link = client.generate_presigned_url(ClientMethod='get_object', Params={'Bucket': '426gradeapp', 'Key': upload_key}, ExpiresIn=60)
 
     upload_obj = IndvUpload(id=response1[0], assignment_id=response1[1], link=temp_link, user_id=response1[3], rubric_items=response1[9])
@@ -335,7 +338,7 @@ async def add_upload_for_assignment(new_upload: UploadFile = File(...), assignme
         
         if len(rows) > 0 and verify_class_student(connection, current_user, rows[0][2]):
             s3_session = boto3.session.Session()
-            client = s3_session.client('s3', region_name='nyc3', endpoint_url='https://nyc3.digitaloceanspaces.com', aws_access_key_id='NBBNIPXWULH7MATJ7XJI', aws_secret_access_key='vt2XSjao45I+f8U/uKvw1Hr5SVyKZFW5esSoKid6x/s')
+            client = s3_session.client('s3', region_name='nyc3', endpoint_url='https://nyc3.digitaloceanspaces.com', aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY)
             og_file_name = new_upload.filename.split('.')
             file_name = str(uuid.uuid4()) + '.' + str(og_file_name[1])
             resp = client.put_object(Body=new_upload.file, Bucket='426gradeapp', Key='uploads/' + file_name)
