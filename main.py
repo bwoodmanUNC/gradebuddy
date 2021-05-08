@@ -162,10 +162,15 @@ def verify_class_student(connection, current_user, indv_class_id):
         cursor = connection.cursor()
         cursor.execute(query)
         rows = cursor.fetchall()
-        if len(rows) > 0 and int(rows[0][1]) == current_user.id:
-            return True
-        else:
-            return False
+        for r in rows:
+            if r[1] == current_user.id:
+                return True
+        
+        return False
+        # if len(rows) > 0 and int(rows[0][1]) == current_user.id:
+        #     return True
+        # else:
+        #     return False
     except Error as e:
         print(e)
         raise HTTPException(status_code=500)
@@ -301,6 +306,7 @@ async def get_upload_information(upload_id: int, current_user: User = Depends(ge
     cursor.execute(query_assignment)
     response2 = cursor.fetchall()[0]
     assignment_class_id = response2[2]
+    print(assignment_class_id)
     if verify_class_student(connection, current_user, assignment_class_id):
         cursor.execute(query_grades)
         grades_arr = [IndvGrade(id=r[0], upload_id=r[1], overall_grade=r[2], selected_rubric_items=r[3], is_me=(r[4] == current_user.id)) for r in cursor.fetchall()]
