@@ -57,3 +57,4 @@ uvloop==0.15.2
 watchgod==0.7
 websockets==8.1
 yarg==0.1.9
+gunicorn==20.1.0
